@@ -308,6 +308,17 @@ final class ConsulCoordination(
           _ => throw UnexpectedStatusCode(createSessionUri, other)
         )
     }
+  }.andThen {
+    case Success(sessionId) => system.registerOnTermination(deleteSession(sessionId))
+  }
+
+  private def deleteSession(sessionId: SessionId) = {
+    val uri = sessionUri.withPath(sessionUri.path / "destroy" / sessionId)
+    send(Put(uri)).flatMap {
+      case HttpResponse(OK, _, entity, _) => ignore(entity).map(_ => true)
+      case HttpResponse(NotFound, _, entity, _) => ignore(entity).map(_ => false)
+      case HttpResponse(other, _, entity, _) => ignore(entity).map(_ => throw UnexpectedStatusCode(uri, other))
+    }
   }
 
   private def parseJson[T](s: String, f: Json => T) = {
